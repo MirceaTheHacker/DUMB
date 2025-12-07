@@ -21,16 +21,16 @@ RUN apt-get update && \
     # core build/runtime packages shared by almost every stage
     apt-get install -y --no-install-recommends \
       build-essential linux-headers-generic libxml2-utils git jq tzdata nano locales python3-dev python3 \
-      python3.11 python3.11-venv python3.11-dev python3-pip libffi-dev libpython3.11 libpq-dev \
-      fuse3 ffmpeg openssl unzip pkg-config libboost-filesystem-dev libboost-thread-dev \
+      python3.11 python3.11-venv python3.11-dev python3.12 python3.12-venv python3.12-dev python3-pip libffi-dev libpython3.11 libpq-dev \
+      fuse3 libfuse3-dev ffmpeg openssl unzip pkg-config libboost-filesystem-dev libboost-thread-dev \
       postgresql-client-16 postgresql-16 postgresql-contrib-16 postgresql-server-dev-16 pgagent libpq-dev \
       dotnet-sdk-9.0 htop bash make g++ git && \
     # Python convenience + locale
     locale-gen en_US.UTF-8 && \
-    update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 && \
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.12 1 && \
     update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1 && \
-    ln -sf /usr/lib/$(uname -m)-linux-gnu/libpython3.11.so.1 /usr/local/lib/libpython3.11.so.1 && \
-    ln -sf /usr/lib/$(uname -m)-linux-gnu/libpython3.11.so.1.0 /usr/local/lib/libpython3.11.so.1.0 && \
+    ln -sf /usr/lib/$(uname -m)-linux-gnu/libpython3.12.so.1 /usr/local/lib/libpython3.12.so.1 && \
+    ln -sf /usr/lib/$(uname -m)-linux-gnu/libpython3.12.so.1.0 /usr/local/lib/libpython3.12.so.1.0 && \
     # Node.js 22.x + global npm / pnpm (used by multiple builders)
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
@@ -101,7 +101,7 @@ ARG RIVEN_TAG
 RUN curl -L https://github.com/rivenmedia/riven/archive/refs/tags/${RIVEN_TAG}.zip -o riven.zip && \
     unzip riven.zip && mkdir -p /riven/backend && mv riven-*/* /riven/backend && rm riven.zip
 WORKDIR /riven/backend
-RUN python3.11 -m venv /riven/backend/venv && \
+RUN python3.12 -m venv /riven/backend/venv && \
     . /riven/backend/venv/bin/activate && \
     pip install --upgrade pip && pip install poetry && \
     poetry config virtualenvs.create false && poetry install --no-root --without dev
@@ -168,6 +168,8 @@ COPY --from=systemstats-builder /usr/lib/postgresql/16/lib/system_stats.so /usr/
 COPY --from=zilean-builder /zilean /zilean
 COPY --from=riven-frontend-builder /riven/frontend /riven/frontend
 COPY --from=riven-backend-builder /riven/backend /riven/backend
+# Overlay patched rivenvfs.py to handle FUSE init failures gracefully
+COPY rivenvfs.py /riven/backend/src/program/services/filesystem/vfs/rivenvfs.py
 COPY --from=dumb-frontend-builder /dumb/frontend /dumb/frontend
 COPY --from=plex_debrid-builder /plex_debrid /plex_debrid
 COPY --from=cli_debrid-builder /cli_debrid /cli_debrid

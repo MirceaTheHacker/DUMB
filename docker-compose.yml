@@ -6,11 +6,13 @@ services:
     shm_size: 128mb                                                   ## Increased for PostgreSQL
     stdin_open: true                                                  ## docker run -i
     tty: true                                                         ## docker run -t
+    privileged: true                                                  ## Required for FUSE mounts
     volumes:
-      - /home/username/docker/DUMB/config:/config                     ## Location of configuration files.
-      - /home/username/docker/DUMB/log:/log                           ## Location for logs
-      - /home/username/docker/DUMB/data:/data                         ## Location for all service data
-      - /home/username/docker/DUMB/mnt/debrid:/mnt/debrid             ## Location for all symlinks and rclone mounts - change to /mnt/debrid:rshared if using decypharr 
+      - /home/nuie-metflix/docker/dumb/config:/config                 ## Location of configuration files.
+      - /home/nuie-metflix/docker/dumb/log:/log                       ## Location for logs
+      - /home/nuie-metflix/docker/dumb/data:/data                     ## Location for all service data
+      - /home/nuie-metflix/docker/dumb/mnt/debrid:/mnt/debrid         ## Location for all symlinks and rclone mounts - change to /mnt/debrid:rshared if using decypharr 
+      - /home/nuie-metflix/riven-mount:/mnt/riven                     ## Host path for Riven VFS mount
     environment:
       - TZ=
       - PUID=
@@ -30,4 +32,4 @@ services:
       - SYS_ADMIN
     security_opt:
       - apparmor:unconfined
-      - no-new-privileges
+      ## `no-new-privileges` blocks FUSE in many setups; omit while using VFS

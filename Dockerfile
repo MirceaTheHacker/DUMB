@@ -71,11 +71,27 @@ FROM base AS zilean-builder
 ARG TARGETARCH
 ARG ZILEAN_TAG
 WORKDIR /tmp
-RUN curl -L https://github.com/iPromKnight/zilean/archive/refs/tags/${ZILEAN_TAG}.zip -o zilean.zip && \
+# Map Docker TARGETARCH to .NET RID format: amd64->x64, arm64->arm64, arm->arm
+RUN if [ -z "${TARGETARCH}" ]; then \
+        case "$(uname -m)" in \
+            x86_64) DOTNET_ARCH=x64 ;; \
+            aarch64) DOTNET_ARCH=arm64 ;; \
+            armv7l) DOTNET_ARCH=arm ;; \
+            *) DOTNET_ARCH=x64 ;; \
+        esac; \
+    else \
+        case "${TARGETARCH}" in \
+            amd64) DOTNET_ARCH=x64 ;; \
+            arm64) DOTNET_ARCH=arm64 ;; \
+            arm) DOTNET_ARCH=arm ;; \
+            *) DOTNET_ARCH=x64 ;; \
+        esac; \
+    fi && \
+    curl -L https://github.com/iPromKnight/zilean/archive/refs/tags/${ZILEAN_TAG}.zip -o zilean.zip && \
     unzip zilean.zip && mv zilean-* /zilean && echo ${ZILEAN_TAG} > /zilean/version.txt && \
-    cd /zilean && dotnet restore -a ${TARGETARCH} && \
-    cd /zilean/src/Zilean.ApiService && dotnet publish -c Release --no-restore -a ${TARGETARCH} -o /zilean/app/ && \
-    cd /zilean/src/Zilean.Scraper && dotnet publish -c Release --no-restore -a ${TARGETARCH} -o /zilean/app/ && \
+    cd /zilean && dotnet restore -a ${DOTNET_ARCH} && \
+    cd /zilean/src/Zilean.ApiService && dotnet publish -c Release --no-restore -a ${DOTNET_ARCH} -o /zilean/app/ && \
+    cd /zilean/src/Zilean.Scraper && dotnet publish -c Release --no-restore -a ${DOTNET_ARCH} -o /zilean/app/ && \
     cd /zilean && python3.11 -m venv /zilean/venv && . /zilean/venv/bin/activate && pip install -r /zilean/requirements.txt && \
     rm -rf /tmp/zilean*
 
@@ -145,10 +161,12 @@ RUN python3.11 -m venv /cli_debrid/venv && \
 ####################################################################################################################################################
 FROM base AS requirements-builder
 COPY pyproject.toml poetry.lock ./
-RUN python3.11 -m venv /venv && \
+RUN python3.12 -m venv /venv && \
     . /venv/bin/activate && \
     pip install --upgrade pip && pip install poetry && \
-    poetry config virtualenvs.create false && poetry install --no-root
+    poetry config virtualenvs.create false && \
+    poetry lock && \
+    poetry install --no-root
 
 ####################################################################################################################################################
 # Stage 10: final-stage

@@ -95,27 +95,43 @@ def setup_branch_version(process_handler, config, process_name, key):
         return False, "Branch version not supported for Zurg."
     else:
         logger.info(f"Using branch {config['branch']} for {process_name}")
-        branch_url, zip_folder_name = downloader.get_branch(
-            config["repo_owner"], config["repo_name"], config["branch"]
-        )
-        if not branch_url:
-            return False, f"Failed to fetch branch {config['branch']}"
+        
+        # Check if config_dir already exists with content and clear_on_update is false
+        config_dir = config["config_dir"]
+        should_skip_download = False
+        if os.path.exists(config_dir) and not config.get("clear_on_update"):
+            # Check if directory has meaningful content (has more than just empty/hidden files)
+            try:
+                contents = os.listdir(config_dir)
+                non_hidden_contents = [f for f in contents if not f.startswith('.')]
+                if non_hidden_contents:
+                    logger.info(f"Config directory {config_dir} already exists with content. Skipping download.")
+                    should_skip_download = True
+            except OSError:
+                pass
+        
+        if not should_skip_download:
+            branch_url, zip_folder_name = downloader.get_branch(
+                config["repo_owner"], config["repo_name"], config["branch"]
+            )
+            if not branch_url:
+                return False, f"Failed to fetch branch {config['branch']}"
 
-        exclude_dirs = None
-        if config.get("clear_on_update"):
-            exclude_dirs = config.get("exclude_dirs", [])
-            success, error = clear_directory(config["config_dir"], exclude_dirs)
+            exclude_dirs = None
+            if config.get("clear_on_update"):
+                exclude_dirs = config.get("exclude_dirs", [])
+                success, error = clear_directory(config["config_dir"], exclude_dirs)
+                if not success:
+                    return False, f"Failed to clear directory: {error}"
+
+            success, error = downloader.download_and_extract(
+                branch_url,
+                config["config_dir"],
+                zip_folder_name=zip_folder_name,
+                exclude_dirs=exclude_dirs,
+            )
             if not success:
-                return False, f"Failed to clear directory: {error}"
-
-        success, error = downloader.download_and_extract(
-            branch_url,
-            config["config_dir"],
-            zip_folder_name=zip_folder_name,
-            exclude_dirs=exclude_dirs,
-        )
-        if not success:
-            return False, f"Failed to download branch: {error}"
+                return False, f"Failed to download branch: {error}"
 
         success, error = additional_setup(process_handler, process_name, config, key)
         if not success:

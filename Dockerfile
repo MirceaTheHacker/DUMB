@@ -54,9 +54,18 @@ RUN python3.11 -m venv /pgadmin/venv && \
 # Stage 2: systemstats-builder
 ####################################################################################################################################################
 FROM base AS systemstats-builder
-ARG SYS_STATS_TAG
+ARG SYS_STATS_TAG=v3.2
 WORKDIR /tmp
-RUN curl -L https://github.com/EnterpriseDB/system_stats/archive/refs/tags/${SYS_STATS_TAG}.zip -o system_stats.zip && \
+RUN set -e && \
+    for attempt in 1 2 3; do \
+        echo "Download attempt $attempt..."; \
+        if curl -L --retry 5 --retry-delay 2 https://github.com/EnterpriseDB/system_stats/archive/refs/tags/${SYS_STATS_TAG}.zip -o system_stats.zip && \
+           unzip -t system_stats.zip >/dev/null 2>&1; then \
+            break; \
+        fi; \
+        rm -f system_stats.zip; \
+        if [ $attempt -lt 3 ]; then sleep 10; fi; \
+    done && \
     unzip system_stats.zip && mv system_stats-* system_stats && \
     cd system_stats && make USE_PGXS=1 && make install USE_PGXS=1 && \
     mkdir -p /usr/share/postgresql/16/extension && \
@@ -69,7 +78,7 @@ RUN curl -L https://github.com/EnterpriseDB/system_stats/archive/refs/tags/${SYS
 ####################################################################################################################################################
 FROM base AS zilean-builder
 ARG TARGETARCH
-ARG ZILEAN_TAG
+ARG ZILEAN_TAG=v3.5.0
 WORKDIR /tmp
 # Map Docker TARGETARCH to .NET RID format: amd64->x64, arm64->arm64, arm->arm
 RUN if [ -z "${TARGETARCH}" ]; then \
@@ -87,7 +96,9 @@ RUN if [ -z "${TARGETARCH}" ]; then \
             *) DOTNET_ARCH=x64 ;; \
         esac; \
     fi && \
-    curl -L https://github.com/iPromKnight/zilean/archive/refs/tags/${ZILEAN_TAG}.zip -o zilean.zip && \
+    curl -fL --retry 5 --retry-delay 2 https://github.com/iPromKnight/zilean/archive/refs/tags/${ZILEAN_TAG}.zip -o zilean.zip && \
+    [ $(stat -c%s "zilean.zip") -gt 5000 ] || (echo "Download failed or too small" && exit 1) && \
+    unzip -t zilean.zip >/dev/null 2>&1 && \
     unzip zilean.zip && mv zilean-* /zilean && echo ${ZILEAN_TAG} > /zilean/version.txt && \
     cd /zilean && dotnet restore -a ${DOTNET_ARCH} && \
     cd /zilean/src/Zilean.ApiService && dotnet publish -c Release --no-restore -a ${DOTNET_ARCH} -o /zilean/app/ && \
@@ -99,23 +110,18 @@ RUN if [ -z "${TARGETARCH}" ]; then \
 # Stage 4: riven-frontend-builder
 ####################################################################################################################################################
 FROM base AS riven-frontend-builder
-ARG RIVEN_FRONTEND_TAG
-RUN curl -L https://github.com/rivenmedia/riven-frontend/archive/refs/tags/${RIVEN_FRONTEND_TAG}.zip -o riven-frontend.zip && \
-    unzip riven-frontend.zip && mkdir -p /riven/frontend && mv riven-frontend-*/* /riven/frontend && rm riven-frontend.zip
+RUN git clone --depth 1 --branch main https://github.com/MirceaTheHacker/riven-frontend.git /riven/frontend
 WORKDIR /riven/frontend
 RUN sed -i '/export default defineConfig({/a\    build: {\n        minify: false\n    },' vite.config.ts && \
-    sed -i "s#/riven/version.txt#/riven/frontend/version.txt#g" src/routes/settings/about/+page.server.ts && \
-    sed -i "s/export const prerender = true;/export const prerender = false;/g" src/routes/settings/about/+page.server.ts && \
     echo "store-dir=./.pnpm-store\nchild-concurrency=1\nfetch-retries=10\nfetch-retry-factor=3\nfetch-retry-mintimeout=15000" > /riven/frontend/.npmrc && \
-    pnpm install && pnpm run build && pnpm prune --prod
+    pnpm install && pnpm run build && \
+    mkdir -p build && cp -r .svelte-kit/output/server/* build/
 
 ####################################################################################################################################################
 # Stage 5: riven-backend-builder
 ####################################################################################################################################################
 FROM base AS riven-backend-builder
-ARG RIVEN_TAG
-RUN curl -L https://github.com/rivenmedia/riven/archive/refs/tags/${RIVEN_TAG}.zip -o riven.zip && \
-    unzip riven.zip && mkdir -p /riven/backend && mv riven-*/* /riven/backend && rm riven.zip
+RUN git clone --depth 1 --branch main https://github.com/MirceaTheHacker/riven.git /riven/backend
 WORKDIR /riven/backend
 RUN python3.12 -m venv /riven/backend/venv && \
     . /riven/backend/venv/bin/activate && \
@@ -126,7 +132,7 @@ RUN python3.12 -m venv /riven/backend/venv && \
 # Stage 6: dumb-frontend-builder
 ####################################################################################################################################################
 FROM base AS dumb-frontend-builder
-ARG DUMB_FRONTEND_TAG
+ARG DUMB_FRONTEND_TAG=v1.16.0
 RUN curl -L https://github.com/nicocapalbo/dmbdb/archive/refs/tags/${DUMB_FRONTEND_TAG}.zip -o dumb-frontend.zip && \
     unzip dumb-frontend.zip && mkdir -p /dumb/frontend && mv dmbdb*/* /dumb/frontend && rm dumb-frontend.zip
 WORKDIR /dumb/frontend
@@ -149,7 +155,7 @@ RUN python3.11 -m venv /plex_debrid/venv && \
 # Stage 8: cli_debrid-builder
 ####################################################################################################################################################
 FROM base AS cli_debrid-builder
-ARG CLI_DEBRID_TAG
+ARG CLI_DEBRID_TAG=v0.7.22
 RUN curl -L https://github.com/godver3/cli_debrid/archive/refs/tags/${CLI_DEBRID_TAG}.zip -o cli_debrid.zip && \
     unzip cli_debrid.zip && mkdir -p /cli_debrid && mv cli_debrid-*/* /cli_debrid && rm -rf cli_debrid.zip cli_debrid-*/*
 RUN python3.11 -m venv /cli_debrid/venv && \

@@ -1,7 +1,7 @@
 services:
   DUMB:
     container_name: DUMB
-    image: iampuid0/dumb:fixed-py312                                  ## Custom image with Python 3.12 venv and all dependencies installed
+    image: dumb:riven-integrated                                      ## Local image with Riven forks integrated
     entrypoint: ["/bin/bash", "-c", ". /venv/bin/activate && python /main.py"]
     stop_grace_period: 30s                                            ## Adjust as need to allow for graceful shutdown of the container
     shm_size: 128mb                                                   ## Increased for PostgreSQL
@@ -15,9 +15,9 @@ services:
       - /home/nuie-metflix/docker/dumb/mnt/debrid:/mnt/debrid         ## Location for all symlinks and rclone mounts - change to /mnt/debrid:rshared if using decypharr 
       - /home/nuie-metflix/riven-mount:/mnt/riven                     ## Host path for Riven VFS mount
     environment:
-      - TZ=
-      - PUID=
-      - PGID=
+      - TZ=UTC
+      - PUID=1000
+      - PGID=1000
     # network_mode: container:gluetun                                ## Example to attach to gluetun vpn container if realdebrid blocks IP address
     ports:
       - "3005:3005"                                                  ## DUMB Frontend
@@ -33,4 +33,4 @@ services:
       - SYS_ADMIN
     security_opt:
       - apparmor:unconfined
-      ## `no-new-privileges` blocks FUSE in many setups; omit while using VFS
+      - no-new-privileges:false

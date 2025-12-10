@@ -156,6 +156,16 @@ def additional_setup(process_handler, process_name, config, key):
                 f"Failed to set up environment for {process_name}: {error}",
             )
 
+    if key == "riven_frontend":
+        paths_to_chown = [
+            os.path.join(config["config_dir"], "dev_db"),
+        ]
+        for path in paths_to_chown:
+            if os.path.exists(path):
+                success, error = chown_recursive(path, user_id, group_id)
+                if not success:
+                    return False, error
+
     if key == "plex_debrid":
         success, error = chown_recursive(
             os.path.join(config["config_dir"], "config"), user_id, group_id
@@ -1492,33 +1502,44 @@ def setup_dotnet_environment(process_handler, key, config_dir):
 def vite_modifications(config_dir):
     try:
         vite_config_path = os.path.join(config_dir, "vite.config.ts")
-        with open(vite_config_path, "r") as file:
-            lines = file.readlines()
-        build_section_exists = any("build:" in line for line in lines)
-        if not build_section_exists:
-            for i, line in enumerate(lines):
-                if line.strip().startswith("export default defineConfig({"):
-                    lines.insert(i + 1, "    build: {\n        minify: false\n    },\n")
-                    break
-        with open(vite_config_path, "w") as file:
-            file.writelines(lines)
-        logger.debug("vite.config.ts modified to disable minification")
+        if os.path.exists(vite_config_path):
+            with open(vite_config_path, "r") as file:
+                lines = file.readlines()
+            build_section_exists = any("build:" in line for line in lines)
+            if not build_section_exists:
+                for i, line in enumerate(lines):
+                    if line.strip().startswith("export default defineConfig({"):
+                        lines.insert(
+                            i + 1, "    build: {\n        minify: false\n    },\n"
+                        )
+                        break
+            with open(vite_config_path, "w") as file:
+                file.writelines(lines)
+            logger.debug("vite.config.ts modified to disable minification")
+        else:
+            logger.info(f"vite.config.ts not found in {config_dir}, skipping edits.")
+
         about_page_path = os.path.join(
             config_dir, "src", "routes", "settings", "about", "+page.server.ts"
         )
-        with open(about_page_path, "r") as file:
-            about_page_lines = file.readlines()
-        for i, line in enumerate(about_page_lines):
-            if "versionFilePath: string = '/riven/version.txt';" in line:
-                about_page_lines[i] = line.replace(
-                    "/riven/version.txt", "/riven/frontend/version.txt"
-                )
-                logger.debug(
-                    f"Modified versionFilePath in +page.ts to point to /riven/frontend/version.txt"
-                )
-                break
-        with open(about_page_path, "w") as file:
-            file.writelines(about_page_lines)
+        if os.path.exists(about_page_path):
+            with open(about_page_path, "r") as file:
+                about_page_lines = file.readlines()
+            for i, line in enumerate(about_page_lines):
+                if "versionFilePath: string = '/riven/version.txt';" in line:
+                    about_page_lines[i] = line.replace(
+                        "/riven/version.txt", "/riven/frontend/version.txt"
+                    )
+                    logger.debug(
+                        "Modified versionFilePath in +page.ts to point to /riven/frontend/version.txt"
+                    )
+                    break
+            with open(about_page_path, "w") as file:
+                file.writelines(about_page_lines)
+        else:
+            logger.info(
+                f"About page not found at {about_page_path}, skipping version path rewrite."
+            )
         return True, None
 
     except Exception as e:

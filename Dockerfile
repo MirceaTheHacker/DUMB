@@ -110,7 +110,9 @@ RUN if [ -z "${TARGETARCH}" ]; then \
 # Stage 4: riven-frontend-builder
 ####################################################################################################################################################
 FROM base AS riven-frontend-builder
-RUN git clone --depth 1 --branch main https://github.com/MirceaTheHacker/riven-frontend.git /riven/frontend
+ARG RIVEN_FRONTEND_REPO=https://github.com/MirceaTheHacker/riven-frontend.git
+ARG RIVEN_FRONTEND_REF=main
+RUN git clone --depth 1 --branch ${RIVEN_FRONTEND_REF} ${RIVEN_FRONTEND_REPO} /riven/frontend
 WORKDIR /riven/frontend
 RUN sed -i '/export default defineConfig({/a\    build: {\n        minify: false\n    },' vite.config.ts && \
     echo "store-dir=./.pnpm-store\nchild-concurrency=1\nfetch-retries=10\nfetch-retry-factor=3\nfetch-retry-mintimeout=15000" > /riven/frontend/.npmrc && \
@@ -121,7 +123,19 @@ RUN sed -i '/export default defineConfig({/a\    build: {\n        minify: false
 # Stage 5: riven-backend-builder
 ####################################################################################################################################################
 FROM base AS riven-backend-builder
-RUN git clone --depth 1 --branch main https://github.com/MirceaTheHacker/riven.git /riven/backend
+ARG RIVEN_BACKEND_REPO=https://github.com/MirceaTheHacker/riven.git
+ARG RIVEN_BACKEND_REF=main
+ARG USE_LOCAL_RIVEN=false
+# Copy local riven if available in build context
+COPY --chown=root:root ./riven /riven/backend-local 2>/dev/null || true
+RUN if [ "${USE_LOCAL_RIVEN}" = "true" ] && [ -d "/riven/backend-local/src" ]; then \
+        echo "Using local Riven code from build context"; \
+        mv /riven/backend-local /riven/backend; \
+    else \
+        echo "Cloning Riven from ${RIVEN_BACKEND_REPO} (branch: ${RIVEN_BACKEND_REF})"; \
+        rm -rf /riven/backend-local && \
+        git clone --depth 1 --branch ${RIVEN_BACKEND_REF} ${RIVEN_BACKEND_REPO} /riven/backend; \
+    fi
 WORKDIR /riven/backend
 RUN python3.12 -m venv /riven/backend/venv && \
     . /riven/backend/venv/bin/activate && \

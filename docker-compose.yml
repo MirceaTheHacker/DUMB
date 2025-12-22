@@ -2,6 +2,20 @@ services:
   DUMB:
     container_name: DUMB
     image: dumb:riven-integrated                                      ## Local image with Riven forks integrated
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Override these to build DUMB against your forks/branches.
+        # Examples:
+        # - RIVEN_BACKEND_REPO: https://github.com/<you>/riven.git
+        # - RIVEN_BACKEND_REF: main
+        # - RIVEN_FRONTEND_REPO: https://github.com/<you>/riven-frontend.git
+        # - RIVEN_FRONTEND_REF: main
+        RIVEN_BACKEND_REPO: ${RIVEN_BACKEND_REPO:-https://github.com/MirceaTheHacker/riven.git}
+        RIVEN_BACKEND_REF: ${RIVEN_BACKEND_REF:-main}
+        RIVEN_FRONTEND_REPO: ${RIVEN_FRONTEND_REPO:-https://github.com/MirceaTheHacker/riven-frontend.git}
+        RIVEN_FRONTEND_REF: ${RIVEN_FRONTEND_REF:-main}
     entrypoint: ["/bin/bash", "-c", ". /venv/bin/activate && python /main.py"]
     stop_grace_period: 30s                                            ## Adjust as need to allow for graceful shutdown of the container
     shm_size: 128mb                                                   ## Increased for PostgreSQL

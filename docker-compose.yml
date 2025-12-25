@@ -42,7 +42,7 @@ services:
       - "32400:32400"                                                ## Plex Media Server      
     devices:
       - /dev/fuse:/dev/fuse:rwm
-      - /dev/dri:/dev/dri       
+      # /dev/dri removed - not needed for headless browser and causes system hangs       
     cap_add:
       - SYS_ADMIN
     security_opt:

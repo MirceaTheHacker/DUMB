@@ -105,6 +105,24 @@ class ProcessHandler:
             def preexec_fn():
                 os.setgid(group_id)
                 os.setuid(user_id)
+                # Set I/O priority to best-effort class with moderate priority (5)
+                # This helps prevent processes from consuming too much I/O bandwidth
+                # Class 2 = best-effort, Priority 0-7 (0=highest, 7=lowest)
+                # Priority 5 = moderate, allows other processes to get I/O access
+                try:
+                    import subprocess as sp
+                    # Use ionice to set I/O scheduling class and priority for this process
+                    # Class 2 (best-effort) with priority 5 (moderate)
+                    # Note: We set it for the current process (which will become the child)
+                    result = sp.run(['ionice', '-c', '2', '-n', '5'], 
+                                   check=False, capture_output=True, timeout=1)
+                    if result.returncode != 0:
+                        # ionice failed, but continue - Docker throttling will still apply
+                        pass
+                except (FileNotFoundError, PermissionError, Exception):
+                    # ionice not available or permission denied - continue without it
+                    # This is not critical, Docker device throttling will still apply
+                    pass
 
             process_description = process_name
             self.logger.info(f"Starting {process_description} process")

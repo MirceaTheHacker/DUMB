@@ -30,7 +30,16 @@ def find_log_file(process_name: str, logger):
         return None
 
     if "log_file" in service_config:
-        return resolve_path(service_config["log_file"])
+        log_file_path = resolve_path(service_config["log_file"])
+        # If the specified log file exists, check if it's recent (modified in last 5 minutes)
+        # If not recent, fall through to find the newest log file
+        if log_file_path.exists():
+            import time
+            file_age_seconds = time.time() - os.path.getmtime(log_file_path)
+            # If file is recent (modified in last 5 minutes), use it
+            if file_age_seconds < 300:
+                return log_file_path
+            # Otherwise, fall through to find newest file
 
     if "config_file" in service_config:
         log_dir = resolve_path(service_config["config_file"]).parent / "logs"
